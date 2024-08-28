@@ -1,10 +1,8 @@
 # Puzzle Cheat
 
-🚨 Currently under development 🚨
+🚨 Experimental project 🚨
 
-Cheat at the puzzle game.
-Give it a good quality photo of the puzzle image.
-Then, just take a photo of the piece and the app will tell you where it goes.
+Cheat at the puzzle game by taking a photo of the piece(s) (it can be already assembled).
 
 ## Installation
 
@@ -16,9 +14,25 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Take a photo of the puzzle image.
+1. Take a photo of the puzzle image (on internet, with good quality).
 2. Take a photo of the piece (or multiple pieces already assembled).
-3. The app will tell you the zone where the piece can be placed.
+3. The app will tell you the zones where the piece can be placed (I hope ^^).
+
+
+For exemple :
+```bash
+python ./run.py --puzzle-image-path ./puzzle_image.jpg --piece-image-path ./piece_image.jpg --number-assembly-pieces 2
+```
+
+You can use `-h` to see the help.
+
+## Result   
+
+From this :     
+<img src="./puzzle_image.jpg" width="50%"/><img src="./piece_image.jpg" width="50%"/>
+
+Result :    
+![Result](./result.gif)
 
 
 ## How does it work technically?
