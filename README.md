@@ -14,9 +14,6 @@ Run a virtual environment and install the requirements.
 pip install -r requirements.txt
 ```
 
-
-```bash
-
 ## Usage
 
 1. Take a photo of the puzzle image.
