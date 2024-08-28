@@ -95,7 +95,7 @@ if __name__ == "__main__":
     original_piece_image = imread_without_background(args.piece_image_path)
 
     # Resize puzzle image to the good size
-    original_puzzle_image = cv2.resize(original_puzzle_image, (1600, original_puzzle_image.shape[0] * 1600 // original_puzzle_image.shape[1]))
+    original_puzzle_image = cv2.resize(original_puzzle_image, (2000, original_puzzle_image.shape[0] * 2000 // original_puzzle_image.shape[1]))
     ratioWH = original_puzzle_image.shape[1] / original_puzzle_image.shape[0]
 
     for rotate_number in range(4):
@@ -122,8 +122,9 @@ if __name__ == "__main__":
         piece_image = cv2.cvtColor(piece_image, cv2.COLOR_BGR2RGB)
 
         # Extract features from images
-        orb = cv2.ORB_create(nfeatures=100)
+        orb = cv2.ORB_create(nfeatures=10000)
         kp1, des1 = orb.detectAndCompute(puzzle_image, None)
+        orb = cv2.ORB_create(nfeatures=50)
         kp2, des2 = orb.detectAndCompute(piece_image, None)
 
 
@@ -132,26 +133,18 @@ if __name__ == "__main__":
         matches = bf.match(des1, des2)
         matches = sorted(matches, key=lambda x: x.distance)
 
-        # Get only matches if multiple matches occur near the same point
-        good_matches = []
-        for i in range(len(matches) - 1):
-            for j in range(i + 1, len(matches)):
-                if abs(matches[i].queryIdx - matches[j].queryIdx) < 10 and abs(matches[i].trainIdx - matches[j].trainIdx) < 10:
-                    good_matches.append(matches[i])
-                    break
-
         # Draw matches
-        match_img = cv2.drawMatches(puzzle_image, kp1, piece_image, kp2, good_matches, None)
+        match_img = cv2.drawMatches(puzzle_image, kp1, piece_image, kp2, matches[:5], None)
 
 
         # SHOW OUTPUTS
 
         match_img = cv2.cvtColor(match_img, cv2.COLOR_RGB2BGR)
-        match_img = cv2.resize(match_img, (1000, match_img.shape[0] * 1000 // match_img.shape[1]))
+        match_img = cv2.resize(match_img, (2000, match_img.shape[0] * 2000 // match_img.shape[1]))
 
         # Create a named window
         cv2.namedWindow("Matches", cv2.WND_PROP_FULLSCREEN)
         # Set the window to fullscreen
         cv2.setWindowProperty("Matches", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.imshow("Matches", match_img)
-        cv2.waitKey()
+        cv2.waitKey(0)
