@@ -32,5 +32,5 @@ sudo apt-get install libjpeg-dev zlib1g-dev
 ## How does it work technically?
 
 1. Remove the background from the piece(s) image.
-2. Feature extraction (Resnet18 pretrained)
-3. Feature Matching (FLANN)
+2. Extract features
+3. Match the piece features with the features of the puzzle image.

@@ -1,15 +1,8 @@
 import argparse
 from backgroundremover.bg import remove
 import cv2
+from math import *
 import numpy as np
-from PIL import Image
-import torch
-import torch.nn as nn
-import torchvision
-from torchvision import models, transforms, utils
-from torch.autograd import Variable
-
-feature_model = models.resnet18(pretrained=True)
 
 def imread_without_background(image_path):
     """
@@ -38,6 +31,9 @@ def imread_without_background(image_path):
     img_array = np.frombuffer(img, np.uint8)
     image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
 
+    # Smooth the image
+    image = cv2.GaussianBlur(image, (5, 5), 0)
+
     # Crop the image to remove the full black background
     w_min = 0
     w_max = image.shape[1]
@@ -63,43 +59,6 @@ def imread_without_background(image_path):
 
     return image
 
-def extract_features(image):
-    """
-    Extract features from the image.
-
-    Args:
-        image (numpy.ndarray): Image to extract features.
-
-    Returns:
-        numpy.ndarray: Features extracted from the image.
-    """
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=0., std=1.)
-    ])
-    image = Image.fromarray(image)
-    image = transform(image)
-    image = image.unsqueeze(0)
-    image = image.to(device)
-
-    outputs = []
-    names = []
-    for layer in conv_layers[0:]:
-        image = layer(image)
-        outputs.append(image)
-        names.append(str(layer))
-    
-    processed = []
-    for feature_map in outputs:
-        feature_map = feature_map.squeeze(0)
-        gray_scale = torch.sum(feature_map,0)
-        gray_scale = gray_scale / feature_map.shape[0]
-        processed.append(gray_scale.data.cpu().numpy())
-
-    return processed
-    
-    
 
 if __name__ == "__main__":
 
@@ -116,6 +75,18 @@ if __name__ == "__main__":
                         type=str,
                         help="Path to the image of the piece to found.",
                         default=0)
+    
+    # Number of pieces in the puzzle
+    parser.add_argument("--number-pieces",
+                        type=int,
+                        help="Number of pieces in the puzzle.",
+                        default=1000)
+    
+    # Number of assembly pieces
+    parser.add_argument("--number-assembly-pieces",
+                        type=int,
+                        help="Number of pieces already assembled.",
+                        default=1)
 
     args = parser.parse_args()
 
@@ -123,66 +94,47 @@ if __name__ == "__main__":
     puzzle_image = cv2.imread(args.puzzle_image_path)
     piece_image = imread_without_background(args.piece_image_path)
 
+    # Resize puzzle image to the good size
+    puzzle_image = cv2.resize(puzzle_image, (1600, piece_image.shape[0] * 1600 // piece_image.shape[1]))
+    ratioWH = puzzle_image.shape[1] / puzzle_image.shape[0]
+
+    # set scale of the piece image
+    scale_mul = args.number_assembly_pieces / (sqrt(args.number_pieces) * ratioWH)
+    # Resize piece image to the good size
+    piece_image = cv2.resize(piece_image, (int(piece_image.shape[1] * scale_mul), int(piece_image.shape[0] * scale_mul)))
+    # set a new image
+    new_piece_image = np.zeros((puzzle_image.shape[0], puzzle_image.shape[1], 3), np.uint8)
+    # add piece image in center of new_piece_image
+    x_offset = int((new_piece_image.shape[1] - piece_image.shape[1]) / 2)
+    y_offset = int((new_piece_image.shape[0] - piece_image.shape[0]) / 2)
+    new_piece_image[y_offset:y_offset + piece_image.shape[0], x_offset:x_offset + piece_image.shape[1]] = piece_image
+    piece_image = new_piece_image
+
     # Convert images to RGB
     puzzle_image = cv2.cvtColor(puzzle_image, cv2.COLOR_BGR2RGB)
     piece_image = cv2.cvtColor(piece_image, cv2.COLOR_BGR2RGB)
 
     # Extract features from images
-    # we will save the conv layer weights in this list
-    model_weights =[]
-    #we will save the 49 conv layers in this list
-    conv_layers = []
-    # get all the model children as list
-    model_children = list(feature_model.children())
-    #counter to keep count of the conv layers
-    counter = 0
-    #append all the conv layers and their respective wights to the list
-    for i in range(len(model_children)):
-        if type(model_children[i]) == nn.Conv2d:
-            counter+=1
-            model_weights.append(model_children[i].weight)
-            conv_layers.append(model_children[i])
-        elif type(model_children[i]) == nn.Sequential:
-            for j in range(len(model_children[i])):
-                for child in model_children[i][j].children():
-                    if type(child) == nn.Conv2d:
-                        counter+=1
-                        model_weights.append(child.weight)
-                        conv_layers.append(child)
+    orb = cv2.ORB_create(nfeatures=100)
+    kp1, des1 = orb.detectAndCompute(puzzle_image, None)
+    kp2, des2 = orb.detectAndCompute(piece_image, None)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    feature_model = feature_model.to(device)
 
-    puzzle_features = extract_features(puzzle_image)
-    piece_features = extract_features(piece_image)
+    # Match features
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(des1, des2)
+    matches = sorted(matches, key=lambda x: x.distance)
+    match_img = cv2.drawMatches(puzzle_image, kp1, piece_image, kp2, matches, None)
 
 
     # SHOW OUTPUTS
 
-    def visualize_features(features):
-        """
-        Visualiser les caractéristiques sur l'image.
+    match_img = cv2.cvtColor(match_img, cv2.COLOR_RGB2BGR)
+    match_img = cv2.resize(match_img, (1000, match_img.shape[0] * 1000 // match_img.shape[1]))
 
-        Args:
-            features (numpy.ndarray): Caractéristiques extraites.
-        """
-        for i, feature in enumerate(features):
-            feature = cv2.resize(feature, (400, feature.shape[0] * 400 // feature.shape[1]))
-            cv2.imshow(f"Feature {i}", cv2.cvtColor(feature, cv2.COLOR_GRAY2BGR))
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-
-    # Visualiser les caractéristiques sur les images
-    visualize_features(puzzle_features)
-    visualize_features(piece_features)
-
-    # Reconvert images to BGR
-    puzzle_image = cv2.cvtColor(puzzle_image, cv2.COLOR_RGB2BGR)
-    piece_image = cv2.cvtColor(piece_image, cv2.COLOR_RGB2BGR)
-
-    # Show images
-    # cv2.imshow("Puzzle Image", puzzle_image)
-    # cv2.imshow("Piece Image", piece_image)
-
-    # Wait for a key press
-    cv2.waitKey(0)
+    # Create a named window
+    cv2.namedWindow("Matches", cv2.WND_PROP_FULLSCREEN)
+    # Set the window to fullscreen
+    cv2.setWindowProperty("Matches", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    cv2.imshow("Matches", match_img)
+    cv2.waitKey()
