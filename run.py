@@ -91,50 +91,67 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Load images
-    puzzle_image = cv2.imread(args.puzzle_image_path)
-    piece_image = imread_without_background(args.piece_image_path)
+    original_puzzle_image = cv2.imread(args.puzzle_image_path)
+    original_piece_image = imread_without_background(args.piece_image_path)
 
     # Resize puzzle image to the good size
-    puzzle_image = cv2.resize(puzzle_image, (1600, piece_image.shape[0] * 1600 // piece_image.shape[1]))
-    ratioWH = puzzle_image.shape[1] / puzzle_image.shape[0]
+    original_puzzle_image = cv2.resize(original_puzzle_image, (1600, original_puzzle_image.shape[0] * 1600 // original_puzzle_image.shape[1]))
+    ratioWH = original_puzzle_image.shape[1] / original_puzzle_image.shape[0]
 
-    # set scale of the piece image
-    scale_mul = args.number_assembly_pieces / (sqrt(args.number_pieces) * ratioWH)
-    # Resize piece image to the good size
-    piece_image = cv2.resize(piece_image, (int(piece_image.shape[1] * scale_mul), int(piece_image.shape[0] * scale_mul)))
-    # set a new image
-    new_piece_image = np.zeros((puzzle_image.shape[0], puzzle_image.shape[1], 3), np.uint8)
-    # add piece image in center of new_piece_image
-    x_offset = int((new_piece_image.shape[1] - piece_image.shape[1]) / 2)
-    y_offset = int((new_piece_image.shape[0] - piece_image.shape[0]) / 2)
-    new_piece_image[y_offset:y_offset + piece_image.shape[0], x_offset:x_offset + piece_image.shape[1]] = piece_image
-    piece_image = new_piece_image
+    for rotate_number in range(4):
+        piece_image = original_piece_image.copy()
+        puzzle_image = original_puzzle_image.copy()
+        # Rotate piece image
+        for i in range(rotate_number):
+            piece_image = cv2.rotate(piece_image, cv2.ROTATE_90_CLOCKWISE)
 
-    # Convert images to RGB
-    puzzle_image = cv2.cvtColor(puzzle_image, cv2.COLOR_BGR2RGB)
-    piece_image = cv2.cvtColor(piece_image, cv2.COLOR_BGR2RGB)
+        # set scale of the piece image
+        scale_mul = args.number_assembly_pieces / (sqrt(args.number_pieces) * ratioWH)
+        # Resize piece image to the good size
+        piece_image = cv2.resize(piece_image, (int(piece_image.shape[1] * scale_mul), int(piece_image.shape[0] * scale_mul)))
+        # set a new image
+        new_piece_image = np.zeros((puzzle_image.shape[0], puzzle_image.shape[1], 3), np.uint8)
+        # add piece image in center of new_piece_image
+        x_offset = int((new_piece_image.shape[1] - piece_image.shape[1]) / 2)
+        y_offset = int((new_piece_image.shape[0] - piece_image.shape[0]) / 2)
+        new_piece_image[y_offset:y_offset + piece_image.shape[0], x_offset:x_offset + piece_image.shape[1]] = piece_image
+        piece_image = new_piece_image
 
-    # Extract features from images
-    orb = cv2.ORB_create(nfeatures=100)
-    kp1, des1 = orb.detectAndCompute(puzzle_image, None)
-    kp2, des2 = orb.detectAndCompute(piece_image, None)
+        # Convert images to RGB
+        puzzle_image = cv2.cvtColor(puzzle_image, cv2.COLOR_BGR2RGB)
+        piece_image = cv2.cvtColor(piece_image, cv2.COLOR_BGR2RGB)
+
+        # Extract features from images
+        orb = cv2.ORB_create(nfeatures=100)
+        kp1, des1 = orb.detectAndCompute(puzzle_image, None)
+        kp2, des2 = orb.detectAndCompute(piece_image, None)
 
 
-    # Match features
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    matches = bf.match(des1, des2)
-    matches = sorted(matches, key=lambda x: x.distance)
-    match_img = cv2.drawMatches(puzzle_image, kp1, piece_image, kp2, matches, None)
+        # Match features
+        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        matches = bf.match(des1, des2)
+        matches = sorted(matches, key=lambda x: x.distance)
+
+        # Get only matches if multiple matches occur near the same point
+        good_matches = []
+        for i in range(len(matches) - 1):
+            for j in range(i + 1, len(matches)):
+                if abs(matches[i].queryIdx - matches[j].queryIdx) < 10 and abs(matches[i].trainIdx - matches[j].trainIdx) < 10:
+                    good_matches.append(matches[i])
+                    break
+
+        # Draw matches
+        match_img = cv2.drawMatches(puzzle_image, kp1, piece_image, kp2, good_matches, None)
 
 
-    # SHOW OUTPUTS
+        # SHOW OUTPUTS
 
-    match_img = cv2.cvtColor(match_img, cv2.COLOR_RGB2BGR)
-    match_img = cv2.resize(match_img, (1000, match_img.shape[0] * 1000 // match_img.shape[1]))
+        match_img = cv2.cvtColor(match_img, cv2.COLOR_RGB2BGR)
+        match_img = cv2.resize(match_img, (1000, match_img.shape[0] * 1000 // match_img.shape[1]))
 
-    # Create a named window
-    cv2.namedWindow("Matches", cv2.WND_PROP_FULLSCREEN)
-    # Set the window to fullscreen
-    cv2.setWindowProperty("Matches", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    cv2.imshow("Matches", match_img)
-    cv2.waitKey()
+        # Create a named window
+        cv2.namedWindow("Matches", cv2.WND_PROP_FULLSCREEN)
+        # Set the window to fullscreen
+        cv2.setWindowProperty("Matches", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.imshow("Matches", match_img)
+        cv2.waitKey()
