@@ -14,11 +14,6 @@ Run a virtual environment and install the requirements.
 pip install -r requirements.txt
 ```
 
-(If you are using a Ubuntu/Debian based system, you might need to install the following packages
-```bash
-sudo apt-get install libjpeg-dev zlib1g-dev
-```
-)
 
 ```bash
 
